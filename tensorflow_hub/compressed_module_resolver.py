@@ -19,6 +19,8 @@ from __future__ import division
 from __future__ import print_function
 
 import hashlib
+import logging
+import ssl
 # pylint:disable=g-import-not-at-top
 try:
   import urllib.request as url
@@ -90,7 +92,26 @@ class HttpCompressedFileResolver(resolver.Resolver):
           return url.HTTPRedirectHandler.redirect_request(
               self, req, fp, code, msg, headers, newurl)
 
-      url_opener = url.build_opener(LoggingHTTPRedirectHandler)
+      # proxy should be able to read http settings without
+      # ProxyHandler({'https': 'http://localhost:3128'})
+      proxy_handler = url.ProxyHandler()
+
+      # proxy_auth_handler = url.HTTPBasicAuthHandler()
+      # proxy_auth_handler.add_password('realm', 'host', '', '')
+
+      http_handler = url.HTTPHandler()
+      # Enable more logging. If you don't see any logging,
+      # which means the traffic doesn't hit http yet.
+      http_handler.set_http_debuglevel(1)
+
+      # Disable SSL as a hack
+      ctx = ssl.create_default_context()
+      ctx.check_hostname = False
+      ctx.verify_mode = ssl.CERT_NONE
+      https_handler = url.HTTPSHandler(context=ctx)
+      https_handler.set_http_debuglevel(1)
+
+      url_opener = url.build_opener(proxy_handler, https_handler)
       response = url_opener.open(request)
       return resolver.DownloadManager(cur_url).download_and_uncompress(
           response, tmp_dir)
